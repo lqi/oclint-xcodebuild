@@ -129,7 +129,19 @@ def read_directory(line):
     else:
         return ""
 
-def convert(input_file, output_file, is_excluded=None):
+def process_arm64_conversation(output_record, enable_flag=False):
+    command = output_record["command"]
+    if re.compile("-arch arm64").search(command):
+        if enable_flag:
+            new_command = command.replace("-arch arm64", "-arch arm")
+            output_record["command"] = new_command
+        else:
+            print "Found arm64 architecture is supported in your project"
+            print "\tyou probably need to use `oclint-xcodebuild -convert-arm64-to-arm`"
+            print "\tread detail at https://github.com/oclint/oclint/issues/190"
+    return output_record
+
+def convert(input_file, output_file, is_excluded=None, convert_arm64_to_arm_flag=False):
     json_input_mode = input_file.endswith('.json')
 
     find_compileC = re.compile("CompileC").search
@@ -162,6 +174,7 @@ def convert(input_file, output_file, is_excluded=None):
                             if not find_clang_command(log_line):
                                 continue
                             output_record = process_clang_command(log_line, directory)
+                            output_record = process_arm64_conversation(output_record, convert_arm64_to_arm_flag)
                             output.write(cr)
                             output.write(json.dumps(output_record, indent=2))
                             cr = ",\n"
@@ -184,6 +197,7 @@ def convert(input_file, output_file, is_excluded=None):
 
 def main():
     arg_parser = argparse.ArgumentParser(description='Converts xcodebuild logs or xctool-json-reporter logs to compile_commands.json')
+    arg_parser.add_argument("-convert-arm64-to-arm", action="store_true", dest="arm64_conversion", help="Convert `-arch arm64` to `-arch arm`")
     arg_parser.add_argument("-e", "-exclude", dest="exclusion", help="Directory exclusion pattern (regular expression)")
     arg_parser.add_argument("-o", "-output", dest="output_file", help="Output json file (default: ./%s)" % JSON_COMPILATION_DATABASE)
     arg_parser.add_argument(metavar="FILE", nargs='?', dest="input_file", help="Input log file (default: ./%s)" % DEFAULT_INPUT_FILE)
@@ -209,7 +223,7 @@ def main():
     else:
         is_excluded = None
 
-    convert(input_file, output_file, is_excluded)
+    convert(input_file, output_file, is_excluded, args.arm64_conversion)
 
 
 if __name__ == '__main__':
